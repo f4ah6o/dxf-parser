@@ -114,8 +114,11 @@ export interface ITableDefinitions {
 }
 
 export interface IBaseTable {
-	handle: string;
-	ownerHandle: string;
+        handle: string;
+        ownerHandle: string;
+        viewPorts?: IViewPort[];
+        lineTypes?: Record<string, ILineType>;
+        layers?: Record<string, ILayer>;
 }
 
 export interface IViewPortTable extends IBaseTable {
@@ -167,52 +170,37 @@ function registerDefaultEntityHandlers(dxfParser: DxfParser) {
 }
 
 export default class DxfParser {
-	private _entityHandlers = {} as Record<EntityName, IGeometry>;
-	constructor() {
-		registerDefaultEntityHandlers(this);
-	}
+        private readonly _entityHandlers: Partial<Record<EntityName, IGeometry>> = {};
+        constructor() {
+                registerDefaultEntityHandlers(this);
+        }
 
-	public parse(source: string) {
-		if (typeof source === 'string') {
-			return this._parse(source);
-		} else {
-			console.error('Cannot read dxf source of type `' + typeof (source));
-			return null;
-		}
-	}
+        public parse(source: string): IDxf | null {
+                if (typeof source === 'string') {
+                        return this._parse(source);
+                }
+                log.error(`Cannot read dxf source of type \`${typeof source}\``);
+                return null;
+        }
 
-	public registerEntityHandler(handlerType: new () => IGeometry) {
-		const instance = new handlerType();
-		this._entityHandlers[instance.ForEntityName] = instance;
-	}
+        public registerEntityHandler(handlerType: new () => IGeometry): void {
+                const instance = new handlerType();
+                this._entityHandlers[instance.ForEntityName] = instance;
+        }
 
-	public parseSync(source: string) {
-		return this.parse(source);
-	}
+        public parseSync(source: string): IDxf | null {
+                return this.parse(source);
+        }
 
-	public parseStream(stream: Readable) {
+        public async parseStream(stream: Readable): Promise<IDxf> {
+                let dxfString = '';
+                for await (const chunk of stream) {
+                        dxfString += chunk.toString();
+                }
+                return this._parse(dxfString);
+        }
 
-		let dxfString = "";
-		const self = this;
-		return new Promise<IDxf>((res, rej) => {
-
-			stream.on('data', (chunk) => {
-				dxfString += chunk;
-			});
-			stream.on('end', () => {
-				try {
-					res(self._parse(dxfString));
-				} catch (err) {
-					rej(err);
-				}
-			});
-			stream.on('error', (err) => {
-				rej(err);
-			});
-		});
-	}
-
-	private _parse(dxfString: string) {
+        private _parse(dxfString: string): IDxf {
 		const dxf = {} as IDxf;
 		let lastHandle = 0;
 		const dxfLinesArray = dxfString.split(/\r\n|\r|\n/g);
@@ -220,7 +208,7 @@ export default class DxfParser {
 		const scanner = new DxfArrayScanner(dxfLinesArray);
 		if (!scanner.hasNext()) throw Error('Empty file');
 
-		const self = this;
+                const entityHandlers = this._entityHandlers;
 		let curr: IGroup;
 
 		function parseAll() {
@@ -414,7 +402,7 @@ export default class DxfParser {
 		 * @return {Object} Object representing tables
 		 */
 		function parseTables() {
-			const tables = {} as ITables;
+                        const tables = {} as Partial<ITables>;
 			curr = scanner.next();
 			while (curr.value !== 'EOF') {
 				if (groupIs(curr, 0, 'ENDSEC'))
@@ -423,14 +411,21 @@ export default class DxfParser {
 				if (groupIs(curr, 0, 'TABLE')) {
 					curr = scanner.next();
 
-					const tableDefinition = tableDefinitions[curr.value as keyof ITableDefinitions];
-					if (tableDefinition) {
-						log.debug(curr.value + ' Table {');
-						tables[tableDefinitions[curr.value as keyof ITableDefinitions].tableName] = parseTable(curr);
-						log.debug('}');
-					} else {
-						log.debug('Unhandled Table ' + curr.value);
-					}
+                                        const tableDefinition = tableDefinitions[curr.value as keyof ITableDefinitions];
+                                        if (tableDefinition) {
+                                                log.debug(curr.value + ' Table {');
+                                                const parsedTable = parseTable(curr);
+                                                if (tableDefinition.tableName === 'viewPort') {
+                                                        tables.viewPort = parsedTable as IViewPortTable;
+                                                } else if (tableDefinition.tableName === 'lineType') {
+                                                        tables.lineType = parsedTable as ILayerTypesTable;
+                                                } else {
+                                                        tables.layer = parsedTable as ILayersTable;
+                                                }
+                                                log.debug('}');
+                                        } else {
+                                                log.debug('Unhandled Table ' + curr.value);
+                                        }
 				} else {
 					// else ignored
 					curr = scanner.next();
@@ -438,69 +433,77 @@ export default class DxfParser {
 			}
 
 			curr = scanner.next();
-			return tables;
-		}
+                        return tables as ITables;
+                }
 
 		const END_OF_TABLE_VALUE = 'ENDTAB';
 
-		function parseTable<T extends IBaseTable = ITable>(group: IGroup) {
-			const tableDefinition = tableDefinitions[group.value as keyof ITableDefinitions];
-			const table = {} as T;
-			let expectedCount = 0;
+                function parseTable(group: IGroup): ITable {
+                        const tableDefinition = tableDefinitions[group.value as keyof ITableDefinitions];
+                        const table = {} as IBaseTable;
+                        let expectedCount = 0;
 
-			curr = scanner.next();
-			while (!groupIs(curr, 0, END_OF_TABLE_VALUE)) {
+                        curr = scanner.next();
+                        while (!groupIs(curr, 0, END_OF_TABLE_VALUE)) {
 
-				switch (curr.code) {
-					case 5:
-						table.handle = curr.value as string;
-						curr = scanner.next();
-						break;
-					case 330:
-						table.ownerHandle = curr.value as string;
-						curr = scanner.next();
-						break;
-					case 100:
-						if (curr.value === 'AcDbSymbolTable') {
-							// ignore
-							curr = scanner.next();
-						} else {
-							logUnhandledGroup(curr);
-							curr = scanner.next();
-						}
-						break;
-					case 70:
-						expectedCount = curr.value as number;
-						curr = scanner.next();
-						break;
-					case 0:
-						if (curr.value === tableDefinition.dxfSymbolName) {
-							table[tableDefinition.tableRecordsProperty] = tableDefinition.parseTableRecords();
-						} else {
-							logUnhandledGroup(curr);
-							curr = scanner.next();
-						}
-						break;
-					default:
-						logUnhandledGroup(curr);
-						curr = scanner.next();
-				}
-			}
-			const tableRecords = table[tableDefinition.tableRecordsProperty];
-			if (tableRecords) {
-				let actualCount = (() => {
-					if (tableRecords.constructor === Array) {
-						return tableRecords.length;
-					} else if (typeof (tableRecords) === 'object') {
-						return Object.keys(tableRecords).length;
-					}
-					return undefined;
-				})();
-				if (expectedCount !== actualCount) log.warn('Parsed ' + actualCount + ' ' + tableDefinition.dxfSymbolName + '\'s but expected ' + expectedCount);
-			}
-			curr = scanner.next();
-			return table;
-		}
+                                switch (curr.code) {
+                                        case 5:
+                                                table.handle = curr.value as string;
+                                                curr = scanner.next();
+                                                break;
+                                        case 330:
+                                                table.ownerHandle = curr.value as string;
+                                                curr = scanner.next();
+                                                break;
+                                        case 100:
+                                                if (curr.value === 'AcDbSymbolTable') {
+                                                        // ignore
+                                                        curr = scanner.next();
+                                                } else {
+                                                        logUnhandledGroup(curr);
+                                                        curr = scanner.next();
+                                                }
+                                                break;
+                                        case 70:
+                                                expectedCount = curr.value as number;
+                                                curr = scanner.next();
+                                                break;
+                                        case 0:
+                                                if (curr.value === tableDefinition.dxfSymbolName) {
+                                                        const records = tableDefinition.parseTableRecords();
+                                                        if (tableDefinition.tableRecordsProperty === 'viewPorts') {
+                                                                table.viewPorts = records as IViewPort[];
+                                                        } else if (tableDefinition.tableRecordsProperty === 'lineTypes') {
+                                                                table.lineTypes = records as Record<string, ILineType>;
+                                                        } else {
+                                                                table.layers = records as Record<string, ILayer>;
+                                                        }
+                                                } else {
+                                                        logUnhandledGroup(curr);
+                                                        curr = scanner.next();
+                                                }
+                                                break;
+                                        default:
+                                                logUnhandledGroup(curr);
+                                                curr = scanner.next();
+                                }
+                        }
+                        const actualCount = (() => {
+                                if (table.viewPorts) {
+                                        return table.viewPorts.length;
+                                }
+                                if (table.lineTypes) {
+                                        return Object.keys(table.lineTypes).length;
+                                }
+                                if (table.layers) {
+                                        return Object.keys(table.layers).length;
+                                }
+                                return undefined;
+                        })();
+                        if (expectedCount !== actualCount) log.warn('Parsed ' + actualCount + ' ' + tableDefinition.dxfSymbolName + '\'s but expected ' + expectedCount);
+                        curr = scanner.next();
+                        return table as ITable;
+                }
 
 		function parseViewPortRecords() {
 			const viewPorts = [] as IViewPort[]; // Multiple table entries may have the same name indicating a multiple viewport configuration
@@ -700,13 +703,14 @@ export default class DxfParser {
 						layerName = curr.value as string;
 						curr = scanner.next();
 						break;
-					case 62: // color, visibility
-						layer.visible = curr.value >= 0;
-						// TODO 0 and 256 are BYBLOCK and BYLAYER respectively. Need to handle these values for layers?.
-						layer.colorIndex = Math.abs(curr.value as number);
-						layer.color = getAcadColor(layer.colorIndex as number);
-						curr = scanner.next();
-						break;
+                                        case 62: // color, visibility
+                                                const colorIndex = Number(curr.value);
+                                                layer.visible = colorIndex >= 0;
+                                                // TODO 0 and 256 are BYBLOCK and BYLAYER respectively. Need to handle these values for layers?.
+                                                layer.colorIndex = Math.abs(colorIndex);
+                                                layer.color = getAcadColor(layer.colorIndex as number);
+                                                curr = scanner.next();
+                                                break;
 					case 70: // frozen layer
 						layer.frozen = (((curr.value as number) & 1) != 0 || ((curr.value as number) & 2) != 0);
 						curr = scanner.next();
@@ -781,7 +785,7 @@ export default class DxfParser {
 						break;
 					}
 
-					const handler = self._entityHandlers[curr.value as EntityName];
+                                        const handler = entityHandlers[curr.value as EntityName];
 					if (handler != null) {
 						log.debug(curr.value + ' {');
 						const entity = handler.parseEntity(scanner, curr);

@@ -1,5 +1,5 @@
 
-# Dxf-Parser
+# @f12o/dxf-parser
 
 **Dxf Parser** is a javascript parser for dxf files. It reads dxf files into one large javascript object with readable properties and a more logical structure.
 
@@ -8,7 +8,7 @@ Also, keep an eye on [three-dxf](https://github.com/gdsestimating/three-dxf), a 
 #### Install
 
 ```sh
-npm install dxf-parser
+pnpm add @f12o/dxf-parser
 ```
 
 Browsers -- As of 0.1.3 standalone browserify version is in the commonjs/ folder. Copy it out of the install directory or just download it from the GitHub repo directly. We may evetually publish this to bower, but the build environment needs a little work first.
@@ -16,7 +16,7 @@ Browsers -- As of 0.1.3 standalone browserify version is in the commonjs/ folder
 #### Usage
 
 ``` js
-import DxfParser from 'dxf-parser';
+import DxfParser from '@f12o/dxf-parser';
 
 // Grab fileText in node.js or browser
 const fileText = ...;
@@ -29,15 +29,15 @@ try {
 }
 ```
 
-See the [wiki Example Output page](https://github.com/gdsestimating/dxf-parser/wiki/Example-Output) to get an idea of what the results look like.
+See the [wiki Example Output page](https://github.com/f4ah6o/dxf-parser/wiki/Example-Output) to get an idea of what the results look like.
 
 #### Run Samples
 
 node.js
 
 ```sh
-npm install
-npm run build
+pnpm install
+pnpm run build
 node samples/node/parseSync
 node samples/node/parseStream
 ```
@@ -65,14 +65,11 @@ Does not yet support
 
 ### Contributing
 
-See the [wiki](https://github.com/gdsestimating/dxf-parser/wiki) for info on contributing
+See the [wiki](https://github.com/f4ah6o/dxf-parser/wiki) for info on contributing
 
 #### Run Tests
 
 ```sh
-npm install -g mocha
-//Then
-npm test
-//OR
-mocha test
+pnpm install
+pnpm test
 ```
