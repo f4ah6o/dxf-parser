@@ -40,11 +40,11 @@ describe('Scanner', function() {
 			var scanner = new Scanner(['1']);
 			scanner.next.bind(scanner).should.throw(/Unexpected end of input/);
 		});
-		it('should throw an error when next is called and eof has already been read', function(){
-			var scanner = new Scanner(['1','2']);
-			scanner._eof = true;
-			scanner.next.bind(scanner).should.throw(/Cannot call \'next\' after EOF/);
-		});
+                it('should throw an error when next is called and eof has already been read', function(){
+                        var scanner = new Scanner(['1','2']);
+                        scanner._eof = true;
+                        scanner.next.bind(scanner).should.throw(/Cannot call 'next' after EOF/);
+                });
 		it('should return the 1st and 2nd index as the code and value respectively', function() {
 			var scanner = new Scanner(['1','2']);
 			var result = scanner.next();

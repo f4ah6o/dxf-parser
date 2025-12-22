@@ -1,58 +1,71 @@
 {
-	"name": "dxf-parser",
-	"version": "1.1.2",
-	"description": "Parse dxf files into a readable, logical js object.",
-	"type": "module",
-	"main": "./commonjs/index.js",
-	"module": "./esm/index.js",
-	"exports": {
+        "name": "@f12o/dxf-parser",
+        "version": "1.2.0",
+        "description": "Parse dxf files into a readable, logical js object.",
+        "type": "module",
+        "main": "./commonjs/index.js",
+        "module": "./esm/index.js",
+        "exports": {
 		"import": "./esm/index.js",
 		"require": "./commonjs/index.js"
 	},
 	"types": "./esm/index.d.ts",
-	"scripts": {
-		"test": "mocha --require @babel/register test",
-		"dev": "tsc -w & webpack --mode development",
-		"prod": "tsc && webpack --mode production",
-		"prepublishOnly": "npm run prod"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/gdsestimating/dxf-parser.git"
-	},
-	"bugs": {
-		"url": "https://github.com/gdsestimating/dxf-parser/issues",
-		"email": "bzuillsmith@gmail.com"
-	},
-	"homepage": "https://github.com/gdsestimating/dxf-parser",
-	"author": "GDS Storefront Estimating (gdsestimating.com)",
-	"contributors": [
-		"Ben Zuill-Smith <bzuillsmith@gmail.com>"
-	],
-	"license": "MIT",
-	"devDependencies": {
-		"@babel/core": "^7.10.4",
-		"@babel/preset-env": "^7.10.4",
-		"@babel/register": "^7.10.4",
-		"approvals": "^3.0.5",
-		"mocha": "^8.0.1",
-		"should": "^13.2.3",
-		"typescript": "^4.4.3",
-		"webpack": "^5.52.1",
-		"webpack-cli": "^4.8.0"
-	},
-	"dependencies": {
-		"loglevel": "^1.7.1"
-	},
-	"keywords": [
-		"dxf",
-		"cad",
-		"parser",
-		"reader"
-	],
-	"files": [
-		"commonjs",
-		"esm",
-		"src"
-	]
+        "scripts": {
+                "pretest": "pnpm run build",
+                "test": "mocha test",
+                "dev": "tsc -w & webpack --mode development",
+                "build": "tsc && webpack --mode production",
+                "lint": "oxlint src test",
+                "format": "oxfmt --write src test",
+                "format:check": "oxfmt --check src test",
+                "prepublishOnly": "pnpm run build"
+        },
+        "repository": {
+                "type": "git",
+                "url": "https://github.com/f4ah6o/dxf-parser.git"
+        },
+        "bugs": {
+                "url": "https://github.com/f4ah6o/dxf-parser/issues",
+                "email": "bzuillsmith@gmail.com"
+        },
+        "homepage": "https://github.com/f4ah6o/dxf-parser",
+        "author": "GDS Storefront Estimating (gdsestimating.com)",
+        "contributors": [
+                "Ben Zuill-Smith <bzuillsmith@gmail.com>"
+        ],
+        "license": "MIT",
+        "devDependencies": {
+                "@babel/core": "^7.28.5",
+                "@babel/preset-env": "^7.28.5",
+                "@babel/register": "^7.28.3",
+                "@types/node": "^22.7.4",
+                "mocha": "^11.7.5",
+                "oxfmt": "^0.20.0",
+                "oxlint": "^0.11.0",
+                "should": "^13.2.3",
+                "typescript": "^5.9.3",
+                "webpack": "^5.104.1",
+                "webpack-cli": "^6.0.1"
+        },
+        "dependencies": {
+                "loglevel": "^1.9.2"
+        },
+        "keywords": [
+                "dxf",
+                "cad",
+                "parser",
+                "reader"
+        ],
+        "files": [
+                "commonjs",
+                "esm",
+                "src"
+        ],
+        "publishConfig": {
+                "access": "public"
+        },
+        "engines": {
+                "node": ">=18"
+        },
+        "packageManager": "pnpm@10.11.0"
 }
