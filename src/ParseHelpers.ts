@@ -1,6 +1,7 @@
 import AUTO_CAD_COLOR_INDEX from './AutoCadColorIndex.js';
 import DxfArrayScanner, { IGroup } from './DxfArrayScanner.js';
 import { IEntity, IPoint } from './entities/geomtry.js';
+import { DxfParseError } from './errors.js';
 
 /**
  * Returns the truecolor value of the given AutoCad color index value
@@ -28,8 +29,10 @@ export function parsePoint(scanner: DxfArrayScanner) {
 	code += 10;
 	curr = scanner.next();
 	if (curr.code != code)
-		throw new Error('Expected code for point value to be ' + code +
-			' but got ' + curr.code + '.');
+		throw new DxfParseError(
+			`Expected code for point value to be ${code} but got ${curr.code}`,
+			scanner.getCurrentLineNumber()
+		);
 	point.y = curr.value as number;
 
 	code += 10;
@@ -59,10 +62,12 @@ export function parsePoint(scanner: DxfArrayScanner) {
 	for (let i=0;i<16;i++) {
 		const curr = scanner.next();
 		if (curr.code !== groupCode) {
-			throw new Error('Expected code for matrix value to be ' + groupCode +
-				' but got ' + curr.code + '.');
+			throw new DxfParseError(
+				`Expected code for matrix value to be ${groupCode} but got ${curr.code}`,
+				scanner.getCurrentLineNumber()
+			);
 		}
-		
+
 		matrix.push(curr.value as number);
 	}
 	return matrix;

@@ -1,3 +1,6 @@
+import log from 'loglevel';
+import { DxfScannerError, DxfValueError } from './errors.js';
+
 export interface IGroup {
 	code: number;
 	value: number | string | boolean;
@@ -19,8 +22,18 @@ export default class DxfArrayScanner {
 	private _eof = false;
 	public lastReadGroup: IGroup;
 	private _data: string[];
+	private _lineNumber = 0;
+
 	constructor(data: string[]) {
 		this._data = data;
+	}
+
+	/**
+	 * Get the current line number being processed
+	 * @returns {number} The current line number (1-based)
+	 */
+	public getCurrentLineNumber(): number {
+		return this._lineNumber;
 	}
 
 	/**
@@ -31,9 +44,17 @@ export default class DxfArrayScanner {
 	public next() {
 		if (!this.hasNext()) {
 			if (!this._eof)
-				throw new Error('Unexpected end of input: EOF group not read before end of file. Ended on code ' + this._data[this._pointer]);
+				throw new DxfScannerError(
+					'Unexpected end of input: EOF group not read before end of file',
+					this._pointer,
+					undefined,
+					this._data[this._pointer]
+				);
 			else
-				throw new Error('Cannot call \'next\' after EOF group has been read');
+				throw new DxfScannerError(
+					'Cannot call next after EOF group has been read',
+					this._pointer
+				);
 		}
 
 		const group = {
@@ -41,10 +62,12 @@ export default class DxfArrayScanner {
 		} as IGroup;
 
 		this._pointer++;
+		this._lineNumber++;
 
-		group.value = parseGroupValue(group.code, this._data[this._pointer].trim());
+		group.value = parseGroupValue(group.code, this._data[this._pointer].trim(), this._lineNumber);
 
 		this._pointer++;
+		this._lineNumber++;
 
 		if (group.code === 0 && group.value === 'EOF') this._eof = true;
 
@@ -56,16 +79,24 @@ export default class DxfArrayScanner {
 	public peek() {
 		if (!this.hasNext()) {
 			if (!this._eof)
-				throw new Error('Unexpected end of input: EOF group not read before end of file. Ended on code ' + this._data[this._pointer]);
+				throw new DxfScannerError(
+					'Unexpected end of input: EOF group not read before end of file',
+					this._pointer,
+					undefined,
+					this._data[this._pointer]
+				);
 			else
-				throw new Error('Cannot call \'next\' after EOF group has been read');
+				throw new DxfScannerError(
+					'Cannot call peek after EOF group has been read',
+					this._pointer
+				);
 		}
 
 		const group = {
 			code: parseInt(this._data[this._pointer])
 		} as IGroup;
 
-		group.value = parseGroupValue(group.code, this._data[this._pointer + 1].trim());
+		group.value = parseGroupValue(group.code, this._data[this._pointer + 1].trim(), this._lineNumber);
 
 		return group;
 	}
@@ -73,6 +104,8 @@ export default class DxfArrayScanner {
 
 	public rewind(numberOfGroups = 1) {
 		this._pointer = this._pointer - numberOfGroups * 2;
+		this._lineNumber = this._lineNumber - numberOfGroups * 2;
+		if (this._lineNumber < 0) this._lineNumber = 0;
 	}
 
 	/**
@@ -109,7 +142,7 @@ export default class DxfArrayScanner {
  * @param value
  * @returns {*}
  */
-function parseGroupValue(code: number, value: string) {
+function parseGroupValue(code: number, value: string, lineNumber: number) {
 	if (code <= 9) return value;
 	if (code >= 10 && code <= 59) return parseFloat(value);
 	if (code >= 60 && code <= 99) return parseInt(value);
@@ -118,7 +151,7 @@ function parseGroupValue(code: number, value: string) {
 	if (code >= 160 && code <= 179) return parseInt(value);
 	if (code >= 210 && code <= 239) return parseFloat(value);
 	if (code >= 270 && code <= 289) return parseInt(value);
-	if (code >= 290 && code <= 299) return parseBoolean(value as '0' | '1');
+	if (code >= 290 && code <= 299) return parseBoolean(value, code, lineNumber);
 	if (code >= 300 && code <= 369) return value;
 	if (code >= 370 && code <= 389) return parseInt(value);
 	if (code >= 390 && code <= 399) return value;
@@ -134,7 +167,7 @@ function parseGroupValue(code: number, value: string) {
 	if (code >= 1010 && code <= 1059) return parseFloat(value);
 	if (code >= 1060 && code <= 1071) return parseInt(value);
 
-	console.log('WARNING: Group code does not have a defined type: %j', { code: code, value: value });
+	log.warn('Group code does not have a defined type', { code, value });
 	return value;
 }
 
@@ -143,8 +176,13 @@ function parseGroupValue(code: number, value: string) {
  * @param str
  * @returns {boolean}
  */
-function parseBoolean(str: '0' | '1') {
+function parseBoolean(str: string, code: number, _lineNumber: number): boolean {
 	if (str === '0') return false;
 	if (str === '1') return true;
-	throw TypeError('String \'' + str + '\' cannot be cast to Boolean type');
+	throw new DxfValueError(
+		`Value '${str}' cannot be cast to Boolean type`,
+		code,
+		str,
+		'boolean'
+	);
 }

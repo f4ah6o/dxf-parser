@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import DxfArrayScanner, { IGroup } from './DxfArrayScanner.js';
 import AUTO_CAD_COLOR_INDEX from './AutoCadColorIndex.js';
+import { DxfParseError } from './errors.js';
 
 import Face from './entities/3dface.js';
 import Arc from './entities/arc.js';
@@ -179,8 +180,7 @@ export default class DxfParser {
                 if (typeof source === 'string') {
                         return this._parse(source);
                 }
-                log.error(`Cannot read dxf source of type \`${typeof source}\``);
-                return null;
+                throw new DxfParseError(`Cannot read dxf source of type \`${typeof source}\``);
         }
 
         public registerEntityHandler(handlerType: new () => IGeometry): void {
@@ -206,10 +206,11 @@ export default class DxfParser {
 		const dxfLinesArray = dxfString.split(/\r\n|\r|\n/g);
 
 		const scanner = new DxfArrayScanner(dxfLinesArray);
-		if (!scanner.hasNext()) throw Error('Empty file');
+		if (!scanner.hasNext()) throw new DxfParseError('Empty DXF file', 0);
 
                 const entityHandlers = this._entityHandlers;
 		let curr: IGroup;
+		let currentSection: string | null = null;
 
 		function parseAll() {
 			curr = scanner.next();
@@ -219,10 +220,12 @@ export default class DxfParser {
 
 					// Be sure we are reading a section code
 					if (curr.code !== 2) {
-						console.error('Unexpected code %s after 0:SECTION', debugCode(curr));
+						log.warn('Unexpected code %s after 0:SECTION', debugCode(curr));
 						curr = scanner.next();
 						continue;
 					}
+
+					currentSection = curr.value as string;
 
 					if (curr.value === 'HEADER') {
 						log.debug('> HEADER');
@@ -823,8 +826,11 @@ export default class DxfParser {
 			code += 10;
 			curr = scanner.next();
 			if (curr.code != code)
-				throw new Error('Expected code for point value to be ' + code +
-					' but got ' + curr.code + '.');
+				throw new DxfParseError(
+					`Expected code for point value to be ${code} but got ${curr.code}`,
+					scanner.getCurrentLineNumber(),
+					currentSection ?? undefined
+				);
 			point.y = curr.value as number;
 
 			code += 10;
